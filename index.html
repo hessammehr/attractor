@@ -37,28 +37,48 @@
     gap: 16px;
     pointer-events: auto;
   }
-  .parameters code {
+  .parameters .param {
     background: rgba(255,255,255,0.06);
     border: 1px solid rgba(255,255,255,0.1);
     border-radius: 6px;
-    padding: 6px 14px;
+    padding: 6px 10px;
     font-size: 14px;
     font-family: 'JetBrains Mono', monospace;
     color: #aaa;
     cursor: pointer;
     user-select: none;
     transition: all 0.2s;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 2px;
   }
-  .parameters code:hover,
-  .parameters code.active {
+  .parameters .param:hover,
+  .parameters .param.active {
     background: rgba(255,255,255,0.1);
     border-color: rgba(255,255,255,0.25);
     color: #fff;
   }
-  .parameters code sub {
+  .parameters .param sub {
     font-size: 10px;
     color: #666;
-    margin-left: 4px;
+    margin-left: 2px;
+  }
+  .parameters .param input {
+    background: none;
+    border: none;
+    border-bottom: 1px solid rgba(255,255,255,0.3);
+    outline: none;
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    width: 5.5ch;
+    padding: 0;
+    text-align: right;
+  }
+  .parameters .param .value {
+    display: inline-block;
+    min-width: 5ch;
+    text-align: right;
   }
   .position {
     top: 24px;
@@ -299,30 +319,61 @@ const paramDefs = [
 ];
 
 let activeParam = null;
+let editingParam = null;
 const paramEl = document.getElementById('parameters');
 
 function renderParams() {
-  paramEl.innerHTML = paramDefs.map(({ key, sym }) =>
-    `<code class="${activeParam === key ? 'active' : ''}" data-key="${key}">${params[key].toFixed(3)}<sub>${sym}</sub></code>`
-  ).join('');
+  paramEl.innerHTML = paramDefs.map(({ key, sym }) => {
+    const isEditing = editingParam === key;
+    const value = params[key].toFixed(3);
+    const inner = isEditing
+      ? `<input type="text" value="${value}" data-key="${key}" autofocus>`
+      : `<span class="value">${value}</span>`;
+    const cls = activeParam === key ? 'param active' : 'param';
+    return `<div class="${cls}" data-key="${key}">${inner}<sub>${sym}</sub></div>`;
+  }).join('');
 
-  paramEl.querySelectorAll('code').forEach(el => {
-    el.addEventListener('click', () => {
-      activeParam = activeParam === el.dataset.key ? null : el.dataset.key;
+  // Wire up click → enter edit mode
+  paramEl.querySelectorAll('.param').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (e.target.tagName === 'INPUT') return;
+      const key = el.dataset.key;
+      if (editingParam === key) return;
+      editingParam = key;
+      activeParam = key;
       renderParams();
+      const input = paramEl.querySelector(`input[data-key="${key}"]`);
+      if (input) { input.select(); }
+    });
+  });
+
+  // Wire up input commit / cancel
+  paramEl.querySelectorAll('input').forEach(input => {
+    const commit = () => {
+      const val = parseFloat(input.value);
+      if (!isNaN(val)) params[input.dataset.key] = val;
+      editingParam = null;
+      renderParams();
+    };
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      if (e.key === 'Escape') { editingParam = null; renderParams(); }
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const delta = e.key === 'ArrowUp' ? 0.01 : -0.01;
+        const val = parseFloat(input.value);
+        if (!isNaN(val)) {
+          const newVal = val + delta;
+          input.value = newVal.toFixed(3);
+          params[input.dataset.key] = newVal;
+        }
+      }
+      e.stopPropagation();
     });
   });
 }
 renderParams();
-
-window.addEventListener('keydown', (e) => {
-  if (activeParam && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-    e.preventDefault();
-    const delta = e.key === 'ArrowUp' ? 0.01 : -0.01;
-    params[activeParam] += delta;
-    renderParams();
-  }
-});
 
 // ── UI: Position ───────────────────────────────────────────────────
 const posEl = document.getElementById('position');
